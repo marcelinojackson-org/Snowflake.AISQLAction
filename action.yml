@@ -1,5 +1,5 @@
 name: "Snowflake.AISQLAction"
-description: "Execute Snowflake Cortex AI SQL functions (AI_COMPLETE, AI_EXTRACT, AI_SENTIMENT, AI_CLASSIFY, AI_COUNT_TOKENS, AI_EMBED, AI_SIMILARITY, AI_SUMMARIZE, AI_PARSE_DOCUMENT)"
+description: "Execute Snowflake Cortex AI SQL functions (AI_COMPLETE, AI_EXTRACT, AI_SENTIMENT, AI_CLASSIFY, AI_COUNT_TOKENS, AI_EMBED, AI_SIMILARITY, AI_SUMMARIZE, AI_TRANSLATE, AI_PARSE_DOCUMENT)"
 author: "Marcelino Jackson"
 branding:
   icon: "database"

@@ -20,6 +20,8 @@ const SUPPORTED_FUNCTIONS = [
   'SNOWFLAKE.CORTEX.SIMILARITY',
   'AI_SUMMARIZE',
   'SNOWFLAKE.CORTEX.SUMMARIZE',
+  'AI_TRANSLATE',
+  'SNOWFLAKE.CORTEX.TRANSLATE',
   'AI_PARSE_DOCUMENT',
   'SNOWFLAKE.CORTEX.PARSE_DOCUMENT'
 ] as const;
@@ -73,6 +75,12 @@ interface AiSimilarityPayload {
 
 interface AiSummarizePayload {
   text: string;
+}
+
+interface AiTranslatePayload {
+  text: string;
+  sourceLanguage: string;
+  targetLanguage: string;
 }
 
 interface AiParseDocumentPayload {
@@ -242,6 +250,21 @@ async function main(): Promise<void> {
         summaryLines.push(`Text length: ${payload.text.length} chars`);
         break;
       }
+      case 'AI_TRANSLATE':
+      case 'SNOWFLAKE.CORTEX.TRANSLATE': {
+        const payload = parseAiTranslateArgs(argsRaw);
+        sqlText = buildAiTranslateSql(functionName, payload);
+        request = {
+          text: payload.text,
+          source_language: payload.sourceLanguage,
+          target_language: payload.targetLanguage
+        };
+        verboseArgs = payload;
+        summaryLines.push(`Text length: ${payload.text.length} chars`);
+        summaryLines.push(`Source language: ${payload.sourceLanguage || '(auto)'}`);
+        summaryLines.push(`Target language: ${payload.targetLanguage}`);
+        break;
+      }
       case 'AI_PARSE_DOCUMENT':
       case 'SNOWFLAKE.CORTEX.PARSE_DOCUMENT': {
         const payload = parseAiParseDocumentArgs(argsRaw);
@@ -382,6 +405,12 @@ function normalizeFunctionName(raw: string): string {
   }
   if (upper === 'SNOWFLAKE.CORTEX.SUMMARIZE') {
     return 'SNOWFLAKE.CORTEX.SUMMARIZE';
+  }
+  if (upper === 'AI_TRANSLATE') {
+    return 'AI_TRANSLATE';
+  }
+  if (upper === 'SNOWFLAKE.CORTEX.TRANSLATE') {
+    return 'SNOWFLAKE.CORTEX.TRANSLATE';
   }
   if (upper === 'AI_PARSE_DOCUMENT') {
     return 'AI_PARSE_DOCUMENT';
@@ -869,6 +898,36 @@ function parseAiSummarizeArgs(raw: string): AiSummarizePayload {
   return { text: resolvedText };
 }
 
+function parseAiTranslateArgs(raw: string): AiTranslatePayload {
+  const parsed = parseJsonObject(raw, 'args');
+
+  const { text, source_language, sourceLanguage, target_language, targetLanguage, ...rest } = parsed;
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`AI_TRANSLATE does not accept additional arguments: ${Object.keys(rest).join(', ')}`);
+  }
+
+  if (source_language !== undefined && sourceLanguage !== undefined) {
+    throw new Error('Provide only one of source_language or sourceLanguage.');
+  }
+  if (target_language !== undefined && targetLanguage !== undefined) {
+    throw new Error('Provide only one of target_language or targetLanguage.');
+  }
+
+  const resolvedText = requireNonEmptyString(text, 'text');
+  const resolvedSourceRaw = source_language ?? sourceLanguage ?? '';
+  if (typeof resolvedSourceRaw !== 'string') {
+    throw new Error('Missing source_language - expected a string.');
+  }
+  const resolvedSource = resolvedSourceRaw.trim();
+  const resolvedTarget = requireTrimmedString(target_language ?? targetLanguage, 'target_language');
+
+  return {
+    text: resolvedText,
+    sourceLanguage: resolvedSource,
+    targetLanguage: resolvedTarget
+  };
+}
+
 function parseAiParseDocumentArgs(raw: string): AiParseDocumentPayload {
   const parsed = parseJsonObject(raw, 'args');
 
@@ -1038,6 +1097,13 @@ function buildAiSimilaritySql(functionName: string, payload: AiSimilarityPayload
 function buildAiSummarizeSql(functionName: string, payload: AiSummarizePayload): string {
   const textLiteral = toSqlString(payload.text);
   return `select ${functionName}(${textLiteral}) as response`;
+}
+
+function buildAiTranslateSql(functionName: string, payload: AiTranslatePayload): string {
+  const textLiteral = toSqlString(payload.text);
+  const sourceLiteral = toSqlString(payload.sourceLanguage);
+  const targetLiteral = toSqlString(payload.targetLanguage);
+  return `select ${functionName}(${textLiteral}, ${sourceLiteral}, ${targetLiteral}) as response`;
 }
 
 function buildAiParseDocumentSql(functionName: string, payload: AiParseDocumentPayload): string {
