@@ -14,6 +14,8 @@ const SUPPORTED_FUNCTIONS = [
   'SNOWFLAKE.CORTEX.CLASSIFY',
   'AI_COUNT_TOKENS',
   'SNOWFLAKE.CORTEX.COUNT_TOKENS',
+  'AI_SIMILARITY',
+  'SNOWFLAKE.CORTEX.SIMILARITY',
   'AI_PARSE_DOCUMENT',
   'SNOWFLAKE.CORTEX.PARSE_DOCUMENT'
 ] as const;
@@ -49,6 +51,14 @@ interface AiCountTokensPayload {
   inputText: string;
   modelName?: string;
   categories?: unknown[];
+}
+
+interface AiSimilarityPayload {
+  input1: string;
+  input2: string;
+  input1File?: string;
+  input2File?: string;
+  config?: Record<string, unknown>;
 }
 
 interface AiParseDocumentPayload {
@@ -166,6 +176,29 @@ async function main(): Promise<void> {
         }
         if (payload.categories) {
           summaryLines.push(`Categories: ${payload.categories.length}`);
+        }
+        break;
+      }
+      case 'AI_SIMILARITY':
+      case 'SNOWFLAKE.CORTEX.SIMILARITY': {
+        const payload = parseAiSimilarityArgs(argsRaw);
+        sqlText = buildAiSimilaritySql(functionName, payload);
+        request = {
+          ...(payload.input1File
+            ? { input1_file: payload.input1File, input2_file: payload.input2File }
+            : { input1: payload.input1, input2: payload.input2 }),
+          ...(payload.config ? { config_object: payload.config } : {})
+        };
+        verboseArgs = payload;
+        if (payload.input1File && payload.input2File) {
+          summaryLines.push(`Input 1 file: ${payload.input1File}`);
+          summaryLines.push(`Input 2 file: ${payload.input2File}`);
+        } else {
+          summaryLines.push(`Input 1 length: ${payload.input1.length} chars`);
+          summaryLines.push(`Input 2 length: ${payload.input2.length} chars`);
+        }
+        if (payload.config) {
+          summaryLines.push(`Config keys: ${Object.keys(payload.config).join(', ')}`);
         }
         break;
       }
@@ -291,6 +324,12 @@ function normalizeFunctionName(raw: string): string {
   }
   if (upper === 'SNOWFLAKE.CORTEX.COUNT_TOKENS') {
     return 'SNOWFLAKE.CORTEX.COUNT_TOKENS';
+  }
+  if (upper === 'AI_SIMILARITY') {
+    return 'AI_SIMILARITY';
+  }
+  if (upper === 'SNOWFLAKE.CORTEX.SIMILARITY') {
+    return 'SNOWFLAKE.CORTEX.SIMILARITY';
   }
   if (upper === 'AI_PARSE_DOCUMENT') {
     return 'AI_PARSE_DOCUMENT';
@@ -685,6 +724,56 @@ function parseAiCountTokensArgs(raw: string): AiCountTokensPayload {
   };
 }
 
+function parseAiSimilarityArgs(raw: string): AiSimilarityPayload {
+  const parsed = parseJsonObject(raw, 'args');
+
+  const { input1, input2, input1_file, input2_file, config_object, config, ...rest } = parsed;
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`AI_SIMILARITY does not accept additional arguments: ${Object.keys(rest).join(', ')}`);
+  }
+
+  const hasText = input1 !== undefined || input2 !== undefined;
+  const hasFile = input1_file !== undefined || input2_file !== undefined;
+
+  if (hasText && hasFile) {
+    throw new Error('AI_SIMILARITY requires either input1/input2 or input1_file/input2_file, not both.');
+  }
+
+  let resolvedInput1 = '';
+  let resolvedInput2 = '';
+  let resolvedInput1File: string | undefined;
+  let resolvedInput2File: string | undefined;
+
+  if (hasFile) {
+    resolvedInput1File = requireNonEmptyString(input1_file, 'input1_file');
+    resolvedInput2File = requireNonEmptyString(input2_file, 'input2_file');
+  } else {
+    resolvedInput1 = requireNonEmptyString(input1, 'input1');
+    resolvedInput2 = requireNonEmptyString(input2, 'input2');
+  }
+
+  if (config_object !== undefined && config !== undefined) {
+    throw new Error('Provide only one of config_object or config.');
+  }
+
+  let resolvedConfig: Record<string, unknown> | undefined;
+  const configValue = config_object ?? config;
+  if (configValue !== undefined) {
+    if (!isPlainObject(configValue)) {
+      throw new Error('AI_SIMILARITY config_object must be a JSON object.');
+    }
+    resolvedConfig = configValue;
+  }
+
+  return {
+    input1: resolvedInput1,
+    input2: resolvedInput2,
+    ...(resolvedInput1File ? { input1File: resolvedInput1File } : {}),
+    ...(resolvedInput2File ? { input2File: resolvedInput2File } : {}),
+    ...(resolvedConfig ? { config: resolvedConfig } : {})
+  };
+}
+
 function parseAiParseDocumentArgs(raw: string): AiParseDocumentPayload {
   const parsed = parseJsonObject(raw, 'args');
 
@@ -830,6 +919,19 @@ function buildAiCountTokensSql(functionName: string, payload: AiCountTokensPaylo
   }
 
   return `select ${functionName}(${functionLiteral}, ${textLiteral}) as response`;
+}
+
+function buildAiSimilaritySql(functionName: string, payload: AiSimilarityPayload): string {
+  const input1Expr = payload.input1File ? payload.input1File : toSqlString(payload.input1);
+  const input2Expr = payload.input2File ? payload.input2File : toSqlString(payload.input2);
+  const args: string[] = [input1Expr, input2Expr];
+
+  if (payload.config) {
+    const configJson = JSON.stringify(payload.config);
+    args.push(`PARSE_JSON(${toSqlString(configJson)})`);
+  }
+
+  return `select ${functionName}(${args.join(', ')}) as response`;
 }
 
 function buildAiParseDocumentSql(functionName: string, payload: AiParseDocumentPayload): string {
