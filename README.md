@@ -1,12 +1,12 @@
 # Snowflake.AISQLAction
 
-Run Snowflake Cortex AI SQL functions from a GitHub Action. This version supports `AI_COMPLETE` only.
+Run Snowflake Cortex AI SQL functions from a GitHub Action. This version supports `AI_COMPLETE` and `AI_EXTRACT`.
 
 ## Common inputs (all functions)
 
 | Input / Env | Required | Description |
 |-------------|----------|-------------|
-| `function` / `AI_FUNCTION` | No (defaults to `AI_COMPLETE`) | Cortex AI SQL function name. Supported: `AI_COMPLETE` (or `SNOWFLAKE.CORTEX.COMPLETE`). |
+| `function` / `AI_FUNCTION` | No (defaults to `AI_COMPLETE`) | Cortex AI SQL function name. Supported: `AI_COMPLETE`, `AI_EXTRACT` (or `SNOWFLAKE.CORTEX.COMPLETE` / `SNOWFLAKE.CORTEX.EXTRACT`). |
 | `args` / `AI_ARGS` | Yes | JSON payload for the function. The schema depends on the function. |
 | `SNOWFLAKE_*` env vars | Yes | Connection parameters for every call (`SNOWFLAKE_ACCOUNT` or `SNOWFLAKE_ACCOUNT_URL`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD` or `SNOWFLAKE_PRIVATE_KEY_PATH`, `SNOWFLAKE_ROLE`, `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_DATABASE`, `SNOWFLAKE_SCHEMA`). |
 | `SNOWFLAKE_LOG_LEVEL` | No | Set to `VERBOSE` to log the SQL and request JSON. |
@@ -19,6 +19,17 @@ Required:
 
 Optional:
 - Any extra keys are treated as `AI_COMPLETE` options (for example `temperature`, `max_tokens`, `top_p`, `stop`).
+- You can also pass an `options` object; it is merged with any extra keys.
+
+## AI_EXTRACT args (function-specific)
+
+Required:
+- `model` (string)
+- `text` (string). `prompt` or `input` are accepted aliases.
+- `schema` (JSON object or JSON string)
+
+Optional:
+- Any extra keys are treated as `AI_EXTRACT` options.
 - You can also pass an `options` object; it is merged with any extra keys.
 
 ## Usage

@@ -1,5 +1,5 @@
 name: "Snowflake.AISQLAction"
-description: "Execute Snowflake Cortex AI SQL functions (starting with AI_COMPLETE)"
+description: "Execute Snowflake Cortex AI SQL functions (AI_COMPLETE, AI_EXTRACT)"
 author: "Marcelino Jackson"
 branding:
   icon: "database"
@@ -10,7 +10,7 @@ inputs:
     required: false
     default: "AI_COMPLETE"
   args:
-    description: "JSON payload for the function (AI_COMPLETE requires model + prompt)."
+    description: "JSON payload for the function (schema depends on function)."
     required: true
 outputs:
   result-text:

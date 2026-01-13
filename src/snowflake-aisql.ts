@@ -3,12 +3,24 @@ import { runSql, SnowflakeConnectionConfig } from '@marcelinojackson-org/snowfla
 
 type LogLevel = 'MINIMAL' | 'VERBOSE';
 
-const SUPPORTED_FUNCTIONS = ['AI_COMPLETE', 'SNOWFLAKE.CORTEX.COMPLETE'] as const;
+const SUPPORTED_FUNCTIONS = [
+  'AI_COMPLETE',
+  'SNOWFLAKE.CORTEX.COMPLETE',
+  'AI_EXTRACT',
+  'SNOWFLAKE.CORTEX.EXTRACT'
+] as const;
 const SUPPORTED_FUNCTION_SET = new Set<string>(SUPPORTED_FUNCTIONS);
 
 interface AiCompletePayload {
   model: string;
   prompt: string;
+  options?: Record<string, unknown>;
+}
+
+interface AiExtractPayload {
+  model: string;
+  text: string;
+  schema: Record<string, unknown>;
   options?: Record<string, unknown>;
 }
 
@@ -19,22 +31,60 @@ async function main(): Promise<void> {
     assertSupportedFunction(functionName);
 
     const argsRaw = pickRequiredInput('args', 'AI_ARGS');
-    const payload = parseAiCompleteArgs(argsRaw);
 
     const config = gatherConfig();
     const verbose = config.logLevel === 'VERBOSE';
-    const sqlText = buildAiCompleteSql(functionName, payload);
+    let sqlText = '';
+    let request: Record<string, unknown> = {};
+    let verboseArgs: unknown = {};
+    const summaryLines: string[] = [`Function: ${functionName}`];
+
+    switch (functionName) {
+      case 'AI_COMPLETE':
+      case 'SNOWFLAKE.CORTEX.COMPLETE': {
+        const payload = parseAiCompleteArgs(argsRaw);
+        sqlText = buildAiCompleteSql(functionName, payload);
+        request = {
+          model: payload.model,
+          prompt: payload.prompt,
+          ...(payload.options ? { options: payload.options } : {})
+        };
+        verboseArgs = payload;
+        summaryLines.push(`Model: ${payload.model}`);
+        summaryLines.push(`Prompt length: ${payload.prompt.length} chars`);
+        if (payload.options) {
+          summaryLines.push(`Options keys: ${Object.keys(payload.options).join(', ')}`);
+        }
+        break;
+      }
+      case 'AI_EXTRACT':
+      case 'SNOWFLAKE.CORTEX.EXTRACT': {
+        const payload = parseAiExtractArgs(argsRaw);
+        sqlText = buildAiExtractSql(functionName, payload);
+        request = {
+          model: payload.model,
+          text: payload.text,
+          schema: payload.schema,
+          ...(payload.options ? { options: payload.options } : {})
+        };
+        verboseArgs = payload;
+        summaryLines.push(`Model: ${payload.model}`);
+        summaryLines.push(`Text length: ${payload.text.length} chars`);
+        summaryLines.push(`Schema keys: ${Object.keys(payload.schema).join(', ')}`);
+        if (payload.options) {
+          summaryLines.push(`Options keys: ${Object.keys(payload.options).join(', ')}`);
+        }
+        break;
+      }
+      default:
+        throw new Error(`Unsupported function '${functionName}'.`);
+    }
 
     if (verbose) {
       console.log(`[VERBOSE] SQL: ${sqlText}`);
-      console.log(`[VERBOSE] Args: ${JSON.stringify(payload)}`);
+      console.log(`[VERBOSE] Args: ${JSON.stringify(verboseArgs)}`);
     } else {
-      console.log(`Function: ${functionName}`);
-      console.log(`Model: ${payload.model}`);
-      console.log(`Prompt length: ${payload.prompt.length} chars`);
-      if (payload.options) {
-        console.log(`Options keys: ${Object.keys(payload.options).join(', ')}`);
-      }
+      summaryLines.forEach((line) => console.log(line));
     }
 
     const result = await runSql(sqlText, config);
@@ -42,11 +92,7 @@ async function main(): Promise<void> {
 
     const output = {
       function: functionName,
-      request: {
-        model: payload.model,
-        prompt: payload.prompt,
-        ...(payload.options ? { options: payload.options } : {})
-      },
+      request,
       result: {
         queryId: result.queryId,
         rowCount: result.rowCount,
@@ -114,6 +160,12 @@ function normalizeFunctionName(raw: string): string {
   if (upper === 'SNOWFLAKE.CORTEX.COMPLETE') {
     return 'SNOWFLAKE.CORTEX.COMPLETE';
   }
+  if (upper === 'AI_EXTRACT') {
+    return 'AI_EXTRACT';
+  }
+  if (upper === 'SNOWFLAKE.CORTEX.EXTRACT') {
+    return 'SNOWFLAKE.CORTEX.EXTRACT';
+  }
   return upper;
 }
 
@@ -161,6 +213,42 @@ function parseAiCompleteArgs(raw: string): AiCompletePayload {
   return { model: resolvedModel, prompt: resolvedPrompt, options: resolvedOptions };
 }
 
+function parseAiExtractArgs(raw: string): AiExtractPayload {
+  const parsed = parseJsonObject(raw, 'args');
+
+  const { model, text, prompt, input, schema, options, ...rest } = parsed;
+  const resolvedModel = requireTrimmedString(model, 'model');
+  const resolvedText = requireTextInput(text, prompt, input);
+  const resolvedSchema = requireSchema(schema);
+  let resolvedOptions: Record<string, unknown> | undefined;
+
+  if (options !== undefined) {
+    if (!isPlainObject(options)) {
+      throw new Error('AI_EXTRACT options must be a JSON object.');
+    }
+    resolvedOptions = { ...(options as Record<string, unknown>) };
+  }
+
+  if (Object.keys(rest).length > 0) {
+    if (resolvedOptions) {
+      resolvedOptions = { ...resolvedOptions, ...rest };
+    } else {
+      resolvedOptions = rest;
+    }
+  }
+
+  if (resolvedOptions && Object.keys(resolvedOptions).length === 0) {
+    resolvedOptions = undefined;
+  }
+
+  return {
+    model: resolvedModel,
+    text: resolvedText,
+    schema: resolvedSchema,
+    options: resolvedOptions
+  };
+}
+
 function parseJsonObject(raw: string, label: string): Record<string, unknown> {
   const trimmed = raw.trim();
   if (!trimmed) {
@@ -203,6 +291,57 @@ function requireNonEmptyString(value: unknown, field: string): string {
   return value;
 }
 
+function requireTextInput(text?: unknown, prompt?: unknown, input?: unknown): string {
+  const candidates: Array<{ label: string; value: unknown }> = [
+    { label: 'text', value: text },
+    { label: 'prompt', value: prompt },
+    { label: 'input', value: input }
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate.value === undefined || candidate.value === null) {
+      continue;
+    }
+    if (typeof candidate.value !== 'string') {
+      throw new Error(`Expected ${candidate.label} to be a string.`);
+    }
+    if (!candidate.value.trim()) {
+      throw new Error(`Missing ${candidate.label} - cannot be blank.`);
+    }
+    return candidate.value;
+  }
+
+  throw new Error('Missing text - provide `text`, `prompt`, or `input`.');
+}
+
+function requireSchema(value: unknown): Record<string, unknown> {
+  if (value === undefined || value === null) {
+    throw new Error('Missing schema - expected a JSON object or JSON string.');
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new Error('Missing schema - cannot be blank.');
+    }
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (!isPlainObject(parsed)) {
+        throw new Error('schema must be a JSON object.');
+      }
+      return parsed;
+    } catch (err) {
+      throw new Error(`Invalid schema JSON: ${(err as Error).message}`);
+    }
+  }
+
+  if (isPlainObject(value)) {
+    return value;
+  }
+
+  throw new Error('schema must be a JSON object or JSON string.');
+}
+
 function buildAiCompleteSql(functionName: string, payload: AiCompletePayload): string {
   const modelLiteral = toSqlString(payload.model);
   const promptLiteral = toSqlString(payload.prompt);
@@ -214,6 +353,21 @@ function buildAiCompleteSql(functionName: string, payload: AiCompletePayload): s
   }
 
   return `select ${functionName}(${modelLiteral}, ${promptLiteral}) as response`;
+}
+
+function buildAiExtractSql(functionName: string, payload: AiExtractPayload): string {
+  const modelLiteral = toSqlString(payload.model);
+  const textLiteral = toSqlString(payload.text);
+  const schemaJson = JSON.stringify(payload.schema);
+  const schemaLiteral = toSqlString(schemaJson);
+
+  if (payload.options && Object.keys(payload.options).length > 0) {
+    const optionsJson = JSON.stringify(payload.options);
+    const optionsLiteral = toSqlString(optionsJson);
+    return `select ${functionName}(${modelLiteral}, ${textLiteral}, PARSE_JSON(${schemaLiteral}), PARSE_JSON(${optionsLiteral})) as response`;
+  }
+
+  return `select ${functionName}(${modelLiteral}, ${textLiteral}, PARSE_JSON(${schemaLiteral})) as response`;
 }
 
 function toSqlString(value: string): string {
