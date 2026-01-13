@@ -64,6 +64,21 @@ Simple:
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
 ```
 
+Result:
+
+```yaml
+- name: Print AI_COMPLETE result
+  run: |
+    echo '${{ steps.ai-complete-simple.outputs.result-text }}'
+    echo '${{ steps.ai-complete-simple.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+"The release focuses on stability improvements, minor performance gains, and bug fixes."
+```
+
 Advanced (all parameters):
 
 ```yaml
@@ -101,11 +116,21 @@ Advanced (all parameters):
     SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
     SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
 
-- name: Inspect AI_COMPLETE output
+Result:
+
+```yaml
+- name: Print AI_COMPLETE result
   run: |
     echo '${{ steps.ai-complete-advanced.outputs.result-text }}'
     echo '${{ steps.ai-complete-advanced.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+{"summary":"Release improves stability and performance.","action_items":["Upgrade dependencies","Review breaking changes"]}
 ```
 
 ## AI_EXTRACT
@@ -148,6 +173,21 @@ Simple:
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
 ```
 
+Result:
+
+```yaml
+- name: Print AI_EXTRACT result
+  run: |
+    echo '${{ steps.ai-extract-simple.outputs.result-text }}'
+    echo '${{ steps.ai-extract-simple.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+{"order_id":"18422","city":"Denver","date":"2024-02-01","amount":"$412.50"}
+```
+
 Advanced (all parameters):
 
 ```yaml
@@ -178,11 +218,21 @@ Advanced (all parameters):
     SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
     SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
 
-- name: Inspect AI_EXTRACT output
+Result:
+
+```yaml
+- name: Print AI_EXTRACT result
   run: |
     echo '${{ steps.ai-extract-advanced.outputs.result-text }}'
     echo '${{ steps.ai-extract-advanced.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+{"title":"Q2 Financial Report","employees":["Ava Patel","Chris Lee"]}
 ```
 
 ## AI_SENTIMENT
@@ -224,6 +274,21 @@ Simple:
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
 ```
 
+Result:
+
+```yaml
+- name: Print AI_SENTIMENT result
+  run: |
+    echo '${{ steps.ai-sentiment-simple.outputs.result-text }}'
+    echo '${{ steps.ai-sentiment-simple.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+{"categories":[{"name":"overall","sentiment":"mixed"}]}
+```
+
 Advanced (all parameters):
 
 ```yaml
@@ -246,11 +311,21 @@ Advanced (all parameters):
     SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
     SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
 
-- name: Inspect AI_SENTIMENT output
+Result:
+
+```yaml
+- name: Print AI_SENTIMENT result
   run: |
     echo '${{ steps.ai-sentiment-advanced.outputs.result-text }}'
     echo '${{ steps.ai-sentiment-advanced.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+{"categories":[{"name":"overall","sentiment":"mixed"},{"name":"service","sentiment":"positive"},{"name":"food","sentiment":"neutral"},{"name":"cost","sentiment":"unknown"}]}
 ```
 
 ## AI_CLASSIFY
@@ -290,6 +365,21 @@ Simple:
     SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
     SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
+
+Result:
+
+```yaml
+- name: Print AI_CLASSIFY result
+  run: |
+    echo '${{ steps.ai-classify-simple.outputs.result-text }}'
+    echo '${{ steps.ai-classify-simple.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+{"labels":["billing"]}
 ```
 
 Advanced (all parameters):
@@ -334,11 +424,21 @@ Advanced (all parameters):
     SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
     SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
 
-- name: Inspect AI_CLASSIFY output
+Result:
+
+```yaml
+- name: Print AI_CLASSIFY result
   run: |
     echo '${{ steps.ai-classify-advanced.outputs.result-text }}'
     echo '${{ steps.ai-classify-advanced.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+{"labels":["billing","product"]}
 ```
 
 ## AI_COUNT_TOKENS
@@ -379,6 +479,21 @@ Simple:
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
 ```
 
+Result:
+
+```yaml
+- name: Print AI_COUNT_TOKENS result
+  run: |
+    echo '${{ steps.ai-count-tokens-simple.outputs.result-text }}'
+    echo '${{ steps.ai-count-tokens-simple.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+12
+```
+
 Advanced (all parameters for a model-based function):
 
 ```yaml
@@ -402,11 +517,21 @@ Advanced (all parameters for a model-based function):
     SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
     SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
 
-- name: Inspect AI_COUNT_TOKENS output
+Result:
+
+```yaml
+- name: Print AI_COUNT_TOKENS result
   run: |
     echo '${{ steps.ai-count-tokens-advanced.outputs.result-text }}'
     echo '${{ steps.ai-count-tokens-advanced.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+16
 ```
 
 ## AI_PARSE_DOCUMENT
@@ -446,6 +571,21 @@ Simple:
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
 ```
 
+Result:
+
+```yaml
+- name: Print AI_PARSE_DOCUMENT result
+  run: |
+    echo '${{ steps.ai-parse-document-simple.outputs.result-text }}'
+    echo '${{ steps.ai-parse-document-simple.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+{"content":"Welcome to the onboarding guide...","metadata":{"pageCount":3}}
+```
+
 Advanced (all parameters):
 
 ```yaml
@@ -475,11 +615,21 @@ Advanced (all parameters):
     SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
     SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
 
-- name: Inspect AI_PARSE_DOCUMENT output
+Result:
+
+```yaml
+- name: Print AI_PARSE_DOCUMENT result
   run: |
     echo '${{ steps.ai-parse-document-advanced.outputs.result-text }}'
     echo '${{ steps.ai-parse-document-advanced.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+{"pages":[{"index":0,"content":"# Handbook ..."}],"metadata":{"pageCount":5}}
 ```
 
 ## Outputs
