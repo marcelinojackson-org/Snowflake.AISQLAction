@@ -7,21 +7,29 @@ const SUPPORTED_FUNCTIONS = [
   'AI_COMPLETE',
   'SNOWFLAKE.CORTEX.COMPLETE',
   'AI_EXTRACT',
-  'SNOWFLAKE.CORTEX.EXTRACT'
+  'SNOWFLAKE.CORTEX.EXTRACT',
+  'AI_SENTIMENT',
+  'SNOWFLAKE.CORTEX.SENTIMENT'
 ] as const;
 const SUPPORTED_FUNCTION_SET = new Set<string>(SUPPORTED_FUNCTIONS);
 
 interface AiCompletePayload {
   model: string;
   prompt: string;
-  options?: Record<string, unknown>;
+  modelParameters?: Record<string, unknown>;
+  responseFormat?: Record<string, unknown>;
+  showDetails?: boolean;
 }
 
 interface AiExtractPayload {
-  model: string;
+  text?: string;
+  file?: string;
+  responseFormat: Record<string, unknown> | unknown[];
+}
+
+interface AiSentimentPayload {
   text: string;
-  schema: Record<string, unknown>;
-  options?: Record<string, unknown>;
+  categories?: string[];
 }
 
 async function main(): Promise<void> {
@@ -47,13 +55,21 @@ async function main(): Promise<void> {
         request = {
           model: payload.model,
           prompt: payload.prompt,
-          ...(payload.options ? { options: payload.options } : {})
+          ...(payload.modelParameters ? { model_parameters: payload.modelParameters } : {}),
+          ...(payload.responseFormat ? { response_format: payload.responseFormat } : {}),
+          ...(payload.showDetails !== undefined ? { show_details: payload.showDetails } : {})
         };
         verboseArgs = payload;
         summaryLines.push(`Model: ${payload.model}`);
         summaryLines.push(`Prompt length: ${payload.prompt.length} chars`);
-        if (payload.options) {
-          summaryLines.push(`Options keys: ${Object.keys(payload.options).join(', ')}`);
+        if (payload.modelParameters) {
+          summaryLines.push(`Model parameters: ${Object.keys(payload.modelParameters).join(', ')}`);
+        }
+        if (payload.responseFormat) {
+          summaryLines.push('Response format: provided');
+        }
+        if (payload.showDetails !== undefined) {
+          summaryLines.push(`Show details: ${payload.showDetails}`);
         }
         break;
       }
@@ -62,17 +78,34 @@ async function main(): Promise<void> {
         const payload = parseAiExtractArgs(argsRaw);
         sqlText = buildAiExtractSql(functionName, payload);
         request = {
-          model: payload.model,
-          text: payload.text,
-          schema: payload.schema,
-          ...(payload.options ? { options: payload.options } : {})
+          ...(payload.text ? { text: payload.text } : {}),
+          ...(payload.file ? { file: payload.file } : {}),
+          response_format: payload.responseFormat
         };
         verboseArgs = payload;
-        summaryLines.push(`Model: ${payload.model}`);
+        if (payload.text) {
+          summaryLines.push(`Text length: ${payload.text.length} chars`);
+        }
+        if (payload.file) {
+          summaryLines.push(`File: ${payload.file}`);
+        }
+        summaryLines.push(
+          `Response format: ${Array.isArray(payload.responseFormat) ? 'array' : 'object'}`
+        );
+        break;
+      }
+      case 'AI_SENTIMENT':
+      case 'SNOWFLAKE.CORTEX.SENTIMENT': {
+        const payload = parseAiSentimentArgs(argsRaw);
+        sqlText = buildAiSentimentSql(functionName, payload);
+        request = {
+          text: payload.text,
+          ...(payload.categories ? { categories: payload.categories } : {})
+        };
+        verboseArgs = payload;
         summaryLines.push(`Text length: ${payload.text.length} chars`);
-        summaryLines.push(`Schema keys: ${Object.keys(payload.schema).join(', ')}`);
-        if (payload.options) {
-          summaryLines.push(`Options keys: ${Object.keys(payload.options).join(', ')}`);
+        if (payload.categories) {
+          summaryLines.push(`Categories: ${payload.categories.length}`);
         }
         break;
       }
@@ -166,6 +199,12 @@ function normalizeFunctionName(raw: string): string {
   if (upper === 'SNOWFLAKE.CORTEX.EXTRACT') {
     return 'SNOWFLAKE.CORTEX.EXTRACT';
   }
+  if (upper === 'AI_SENTIMENT') {
+    return 'AI_SENTIMENT';
+  }
+  if (upper === 'SNOWFLAKE.CORTEX.SENTIMENT') {
+    return 'SNOWFLAKE.CORTEX.SENTIMENT';
+  }
   return upper;
 }
 
@@ -186,67 +225,204 @@ function pickRequiredInput(inputName: string, envName: string): string {
 function parseAiCompleteArgs(raw: string): AiCompletePayload {
   const parsed = parseJsonObject(raw, 'args');
 
-  const { model, prompt, options, ...rest } = parsed;
+  const {
+    model,
+    prompt,
+    model_parameters,
+    modelParameters,
+    response_format,
+    responseFormat,
+    show_details,
+    showDetails,
+    options,
+    ...rest
+  } = parsed;
   const resolvedModel = requireTrimmedString(model, 'model');
   const resolvedPrompt = requireNonEmptyString(prompt, 'prompt');
-  let resolvedOptions: Record<string, unknown> | undefined;
+
+  const resolvedModelParameters = mergeModelParameters(model_parameters, modelParameters, options, rest);
+  const resolvedResponseFormat = resolveResponseFormat(response_format, responseFormat);
+  const resolvedShowDetails = resolveShowDetails(show_details, showDetails);
+
+  return {
+    model: resolvedModel,
+    prompt: resolvedPrompt,
+    modelParameters: resolvedModelParameters,
+    responseFormat: resolvedResponseFormat,
+    showDetails: resolvedShowDetails
+  };
+}
+
+function mergeModelParameters(
+  modelParameters?: unknown,
+  modelParametersAlt?: unknown,
+  options?: unknown,
+  rest?: Record<string, unknown>
+): Record<string, unknown> | undefined {
+  const sources: Record<string, unknown>[] = [];
+
+  if (modelParameters !== undefined) {
+    if (!isPlainObject(modelParameters)) {
+      throw new Error('AI_COMPLETE model_parameters must be a JSON object.');
+    }
+    sources.push(modelParameters);
+  }
+
+  if (modelParametersAlt !== undefined) {
+    if (!isPlainObject(modelParametersAlt)) {
+      throw new Error('AI_COMPLETE modelParameters must be a JSON object.');
+    }
+    sources.push(modelParametersAlt);
+  }
 
   if (options !== undefined) {
     if (!isPlainObject(options)) {
       throw new Error('AI_COMPLETE options must be a JSON object.');
     }
-    resolvedOptions = { ...(options as Record<string, unknown>) };
+    sources.push(options);
   }
 
-  if (Object.keys(rest).length > 0) {
-    if (resolvedOptions) {
-      resolvedOptions = { ...resolvedOptions, ...rest };
-    } else {
-      resolvedOptions = rest;
-    }
+  if (rest && Object.keys(rest).length > 0) {
+    sources.push(rest);
   }
 
-  if (resolvedOptions && Object.keys(resolvedOptions).length === 0) {
-    resolvedOptions = undefined;
+  if (sources.length === 0) {
+    return undefined;
   }
 
-  return { model: resolvedModel, prompt: resolvedPrompt, options: resolvedOptions };
+  const merged = Object.assign({}, ...sources);
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function resolveResponseFormat(responseFormat?: unknown, responseFormatAlt?: unknown): Record<string, unknown> | undefined {
+  const primary = responseFormat !== undefined ? responseFormat : responseFormatAlt;
+  const secondary = responseFormat !== undefined && responseFormatAlt !== undefined;
+
+  if (secondary) {
+    throw new Error('Provide only one of response_format or responseFormat.');
+  }
+
+  if (primary === undefined) {
+    return undefined;
+  }
+
+  if (!isPlainObject(primary)) {
+    throw new Error('AI_COMPLETE response_format must be a JSON object.');
+  }
+
+  return primary;
+}
+
+function resolveShowDetails(showDetails?: unknown, showDetailsAlt?: unknown): boolean | undefined {
+  const primary = showDetails !== undefined ? showDetails : showDetailsAlt;
+  const secondary = showDetails !== undefined && showDetailsAlt !== undefined;
+
+  if (secondary) {
+    throw new Error('Provide only one of show_details or showDetails.');
+  }
+
+  if (primary === undefined) {
+    return undefined;
+  }
+
+  if (typeof primary !== 'boolean') {
+    throw new Error('AI_COMPLETE show_details must be a boolean.');
+  }
+
+  return primary;
 }
 
 function parseAiExtractArgs(raw: string): AiExtractPayload {
   const parsed = parseJsonObject(raw, 'args');
 
-  const { model, text, prompt, input, schema, options, ...rest } = parsed;
-  const resolvedModel = requireTrimmedString(model, 'model');
-  const resolvedText = requireTextInput(text, prompt, input);
-  const resolvedSchema = requireSchema(schema);
-  let resolvedOptions: Record<string, unknown> | undefined;
-
-  if (options !== undefined) {
-    if (!isPlainObject(options)) {
-      throw new Error('AI_EXTRACT options must be a JSON object.');
-    }
-    resolvedOptions = { ...(options as Record<string, unknown>) };
-  }
-
+  const { text, file, response_format, responseFormat, ...rest } = parsed;
   if (Object.keys(rest).length > 0) {
-    if (resolvedOptions) {
-      resolvedOptions = { ...resolvedOptions, ...rest };
-    } else {
-      resolvedOptions = rest;
-    }
+    throw new Error(`AI_EXTRACT does not accept additional arguments: ${Object.keys(rest).join(', ')}`);
   }
 
-  if (resolvedOptions && Object.keys(resolvedOptions).length === 0) {
-    resolvedOptions = undefined;
+  const hasText = text !== undefined && text !== null;
+  const hasFile = file !== undefined && file !== null;
+  if (hasText === hasFile) {
+    throw new Error('AI_EXTRACT requires either `text` or `file` (but not both).');
   }
+
+  let resolvedText: string | undefined;
+  let resolvedFile: string | undefined;
+
+  if (hasText) {
+    resolvedText = requireNonEmptyString(text, 'text');
+  } else if (hasFile) {
+    resolvedFile = requireNonEmptyString(file, 'file');
+  }
+
+  const resolvedResponseFormat = resolveExtractResponseFormat(response_format, responseFormat);
 
   return {
-    model: resolvedModel,
     text: resolvedText,
-    schema: resolvedSchema,
-    options: resolvedOptions
+    file: resolvedFile,
+    responseFormat: resolvedResponseFormat
   };
+}
+
+function resolveExtractResponseFormat(
+  responseFormat?: unknown,
+  responseFormatAlt?: unknown
+): Record<string, unknown> | unknown[] {
+  const primary = responseFormat !== undefined ? responseFormat : responseFormatAlt;
+  const secondary = responseFormat !== undefined && responseFormatAlt !== undefined;
+
+  if (secondary) {
+    throw new Error('Provide only one of response_format or responseFormat.');
+  }
+
+  if (primary === undefined) {
+    throw new Error('Missing response_format - expected an object or array.');
+  }
+
+  if (!isPlainObject(primary) && !Array.isArray(primary)) {
+    throw new Error('AI_EXTRACT response_format must be a JSON object or array.');
+  }
+
+  return primary;
+}
+
+function parseAiSentimentArgs(raw: string): AiSentimentPayload {
+  const parsed = parseJsonObject(raw, 'args');
+
+  const { text, categories, ...rest } = parsed;
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`AI_SENTIMENT does not accept additional arguments: ${Object.keys(rest).join(', ')}`);
+  }
+
+  const resolvedText = requireNonEmptyString(text, 'text');
+  let resolvedCategories: string[] | undefined;
+
+  if (categories !== undefined) {
+    if (!Array.isArray(categories)) {
+      throw new Error('AI_SENTIMENT categories must be a JSON array of strings.');
+    }
+    if (categories.length === 0) {
+      throw new Error('AI_SENTIMENT categories cannot be empty.');
+    }
+    if (categories.length > 10) {
+      throw new Error('AI_SENTIMENT categories supports up to 10 items.');
+    }
+    resolvedCategories = categories.map((entry, index) => {
+      if (typeof entry !== 'string') {
+        throw new Error(`AI_SENTIMENT categories[${index}] must be a string.`);
+      }
+      const trimmed = entry.trim();
+      if (!trimmed) {
+        throw new Error(`AI_SENTIMENT categories[${index}] cannot be blank.`);
+      }
+      if (trimmed.length > 30) {
+        throw new Error(`AI_SENTIMENT categories[${index}] exceeds 30 characters.`);
+      }
+      return trimmed;
+    });
+  }
+
+  return { text: resolvedText, categories: resolvedCategories };
 }
 
 function parseJsonObject(raw: string, label: string): Record<string, unknown> {
@@ -291,83 +467,55 @@ function requireNonEmptyString(value: unknown, field: string): string {
   return value;
 }
 
-function requireTextInput(text?: unknown, prompt?: unknown, input?: unknown): string {
-  const candidates: Array<{ label: string; value: unknown }> = [
-    { label: 'text', value: text },
-    { label: 'prompt', value: prompt },
-    { label: 'input', value: input }
-  ];
-
-  for (const candidate of candidates) {
-    if (candidate.value === undefined || candidate.value === null) {
-      continue;
-    }
-    if (typeof candidate.value !== 'string') {
-      throw new Error(`Expected ${candidate.label} to be a string.`);
-    }
-    if (!candidate.value.trim()) {
-      throw new Error(`Missing ${candidate.label} - cannot be blank.`);
-    }
-    return candidate.value;
-  }
-
-  throw new Error('Missing text - provide `text`, `prompt`, or `input`.');
-}
-
-function requireSchema(value: unknown): Record<string, unknown> {
-  if (value === undefined || value === null) {
-    throw new Error('Missing schema - expected a JSON object or JSON string.');
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      throw new Error('Missing schema - cannot be blank.');
-    }
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (!isPlainObject(parsed)) {
-        throw new Error('schema must be a JSON object.');
-      }
-      return parsed;
-    } catch (err) {
-      throw new Error(`Invalid schema JSON: ${(err as Error).message}`);
-    }
-  }
-
-  if (isPlainObject(value)) {
-    return value;
-  }
-
-  throw new Error('schema must be a JSON object or JSON string.');
-}
-
 function buildAiCompleteSql(functionName: string, payload: AiCompletePayload): string {
-  const modelLiteral = toSqlString(payload.model);
-  const promptLiteral = toSqlString(payload.prompt);
+  const args: string[] = [];
+  args.push(`model => ${toSqlString(payload.model)}`);
+  args.push(`prompt => ${toSqlString(payload.prompt)}`);
 
-  if (payload.options && Object.keys(payload.options).length > 0) {
-    const optionsJson = JSON.stringify(payload.options);
-    const optionsLiteral = toSqlString(optionsJson);
-    return `select ${functionName}(${modelLiteral}, ${promptLiteral}, PARSE_JSON(${optionsLiteral})) as response`;
+  if (payload.modelParameters && Object.keys(payload.modelParameters).length > 0) {
+    const paramsJson = JSON.stringify(payload.modelParameters);
+    args.push(`model_parameters => PARSE_JSON(${toSqlString(paramsJson)})`);
   }
 
-  return `select ${functionName}(${modelLiteral}, ${promptLiteral}) as response`;
+  if (payload.responseFormat) {
+    const formatJson = JSON.stringify(payload.responseFormat);
+    args.push(`response_format => PARSE_JSON(${toSqlString(formatJson)})`);
+  }
+
+  if (payload.showDetails !== undefined) {
+    args.push(`show_details => ${payload.showDetails ? 'TRUE' : 'FALSE'}`);
+  }
+
+  return `select ${functionName}(${args.join(', ')}) as response`;
 }
 
 function buildAiExtractSql(functionName: string, payload: AiExtractPayload): string {
-  const modelLiteral = toSqlString(payload.model);
-  const textLiteral = toSqlString(payload.text);
-  const schemaJson = JSON.stringify(payload.schema);
-  const schemaLiteral = toSqlString(schemaJson);
+  const responseJson = JSON.stringify(payload.responseFormat);
+  const responseLiteral = toSqlString(responseJson);
+  const args: string[] = [];
 
-  if (payload.options && Object.keys(payload.options).length > 0) {
-    const optionsJson = JSON.stringify(payload.options);
-    const optionsLiteral = toSqlString(optionsJson);
-    return `select ${functionName}(${modelLiteral}, ${textLiteral}, PARSE_JSON(${schemaLiteral}), PARSE_JSON(${optionsLiteral})) as response`;
+  if (payload.text) {
+    args.push(`text => ${toSqlString(payload.text)}`);
+  }
+  if (payload.file) {
+    args.push(`file => ${payload.file}`);
   }
 
-  return `select ${functionName}(${modelLiteral}, ${textLiteral}, PARSE_JSON(${schemaLiteral})) as response`;
+  args.push(`responseFormat => PARSE_JSON(${responseLiteral})`);
+
+  return `select ${functionName}(${args.join(', ')}) as response`;
+}
+
+function buildAiSentimentSql(functionName: string, payload: AiSentimentPayload): string {
+  const textLiteral = toSqlString(payload.text);
+
+  if (payload.categories && payload.categories.length > 0) {
+    const categoriesJson = JSON.stringify(payload.categories);
+    const categoriesLiteral = toSqlString(categoriesJson);
+    return `select ${functionName}(${textLiteral}, PARSE_JSON(${categoriesLiteral})) as response`;
+  }
+
+  return `select ${functionName}(${textLiteral}) as response`;
 }
 
 function toSqlString(value: string): string {
