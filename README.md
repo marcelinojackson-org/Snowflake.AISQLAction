@@ -40,7 +40,8 @@ Returns:
 
 ### AI_COMPLETE examples
 
-Simple:
+<details open>
+<summary>Simple</summary>
 
 ```yaml
 - name: AI_COMPLETE (simple)
@@ -79,7 +80,10 @@ Sample result:
 "The release focuses on stability improvements, minor performance gains, and bug fixes."
 ```
 
-Advanced (all parameters):
+</details>
+
+<details open>
+<summary>Advanced (all parameters)</summary>
 
 ```yaml
 - name: AI_COMPLETE (advanced)
@@ -133,6 +137,8 @@ Sample result:
 {"summary":"Release improves stability and performance.","action_items":["Upgrade dependencies","Review breaking changes"]}
 ```
 
+</details>
+
 ## AI_EXTRACT
 
 Required args:
@@ -144,7 +150,8 @@ Returns:
 
 ### AI_EXTRACT examples
 
-Simple:
+<details open>
+<summary>Simple</summary>
 
 ```yaml
 - name: AI_EXTRACT (simple)
@@ -188,7 +195,10 @@ Sample result:
 {"order_id":"18422","city":"Denver","date":"2024-02-01","amount":"$412.50"}
 ```
 
-Advanced (all parameters):
+</details>
+
+<details open>
+<summary>Advanced (all parameters)</summary>
 
 ```yaml
 - name: AI_EXTRACT (advanced)
@@ -235,6 +245,8 @@ Sample result:
 {"title":"Q2 Financial Report","employees":["Ava Patel","Chris Lee"]}
 ```
 
+</details>
+
 ## AI_SENTIMENT
 
 Required args:
@@ -251,7 +263,8 @@ Returns:
 
 ### AI_SENTIMENT examples
 
-Simple:
+<details open>
+<summary>Simple</summary>
 
 ```yaml
 - name: AI_SENTIMENT (simple)
@@ -289,7 +302,10 @@ Sample result:
 {"categories":[{"name":"overall","sentiment":"mixed"}]}
 ```
 
-Advanced (all parameters):
+</details>
+
+<details open>
+<summary>Advanced (all parameters)</summary>
 
 ```yaml
 - name: AI_SENTIMENT (advanced)
@@ -328,6 +344,8 @@ Sample result:
 {"categories":[{"name":"overall","sentiment":"mixed"},{"name":"service","sentiment":"positive"},{"name":"food","sentiment":"neutral"},{"name":"cost","sentiment":"unknown"}]}
 ```
 
+</details>
+
 ## AI_CLASSIFY
 
 Required args:
@@ -343,7 +361,8 @@ Returns:
 
 ### AI_CLASSIFY examples
 
-Simple:
+<details open>
+<summary>Simple</summary>
 
 ```yaml
 - name: AI_CLASSIFY (simple)
@@ -382,7 +401,10 @@ Sample result:
 {"labels":["billing"]}
 ```
 
-Advanced (all parameters):
+</details>
+
+<details open>
+<summary>Advanced (all parameters)</summary>
 
 ```yaml
 - name: AI_CLASSIFY (advanced)
@@ -441,6 +463,8 @@ Sample result:
 {"labels":["billing","product"]}
 ```
 
+</details>
+
 ## AI_COUNT_TOKENS
 
 Required args:
@@ -455,7 +479,8 @@ Returns:
 
 ### AI_COUNT_TOKENS examples
 
-Simple:
+<details open>
+<summary>Simple</summary>
 
 ```yaml
 - name: AI_COUNT_TOKENS (simple)
@@ -494,7 +519,10 @@ Sample result:
 12
 ```
 
-Advanced (all parameters for a model-based function):
+</details>
+
+<details open>
+<summary>Advanced (all parameters)</summary>
 
 ```yaml
 - name: AI_COUNT_TOKENS (advanced)
@@ -534,6 +562,8 @@ Sample result:
 16
 ```
 
+</details>
+
 ## AI_PARSE_DOCUMENT
 
 Required args:
@@ -548,7 +578,8 @@ Returns:
 
 ### AI_PARSE_DOCUMENT examples
 
-Simple:
+<details open>
+<summary>Simple</summary>
 
 ```yaml
 - name: AI_PARSE_DOCUMENT (simple)
@@ -586,7 +617,10 @@ Sample result:
 {"content":"Welcome to the onboarding guide...","metadata":{"pageCount":3}}
 ```
 
-Advanced (all parameters):
+</details>
+
+<details open>
+<summary>Advanced (all parameters)</summary>
 
 ```yaml
 - name: AI_PARSE_DOCUMENT (advanced)
@@ -631,6 +665,8 @@ Sample result:
 ```json
 {"pages":[{"index":0,"content":"# Handbook ..."}],"metadata":{"pageCount":5}}
 ```
+
+</details>
 
 ## Outputs
 
