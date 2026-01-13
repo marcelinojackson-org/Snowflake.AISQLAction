@@ -9,7 +9,13 @@ const SUPPORTED_FUNCTIONS = [
   'AI_EXTRACT',
   'SNOWFLAKE.CORTEX.EXTRACT',
   'AI_SENTIMENT',
-  'SNOWFLAKE.CORTEX.SENTIMENT'
+  'SNOWFLAKE.CORTEX.SENTIMENT',
+  'AI_CLASSIFY',
+  'SNOWFLAKE.CORTEX.CLASSIFY',
+  'AI_COUNT_TOKENS',
+  'SNOWFLAKE.CORTEX.COUNT_TOKENS',
+  'AI_PARSE_DOCUMENT',
+  'SNOWFLAKE.CORTEX.PARSE_DOCUMENT'
 ] as const;
 const SUPPORTED_FUNCTION_SET = new Set<string>(SUPPORTED_FUNCTIONS);
 
@@ -30,6 +36,24 @@ interface AiExtractPayload {
 interface AiSentimentPayload {
   text: string;
   categories?: string[];
+}
+
+interface AiClassifyPayload {
+  input: string | Record<string, unknown>;
+  categories: Array<string | { label: string; description?: string }>;
+  config?: Record<string, unknown>;
+}
+
+interface AiCountTokensPayload {
+  functionName: string;
+  inputText: string;
+  modelName?: string;
+  categories?: unknown[];
+}
+
+interface AiParseDocumentPayload {
+  file: string;
+  options?: Record<string, unknown>;
 }
 
 async function main(): Promise<void> {
@@ -106,6 +130,57 @@ async function main(): Promise<void> {
         summaryLines.push(`Text length: ${payload.text.length} chars`);
         if (payload.categories) {
           summaryLines.push(`Categories: ${payload.categories.length}`);
+        }
+        break;
+      }
+      case 'AI_CLASSIFY':
+      case 'SNOWFLAKE.CORTEX.CLASSIFY': {
+        const payload = parseAiClassifyArgs(argsRaw);
+        sqlText = buildAiClassifySql(functionName, payload);
+        request = {
+          input: payload.input,
+          categories: payload.categories,
+          ...(payload.config ? { config_object: payload.config } : {})
+        };
+        verboseArgs = payload;
+        summaryLines.push(`Categories: ${payload.categories.length}`);
+        if (payload.config) {
+          summaryLines.push(`Config keys: ${Object.keys(payload.config).join(', ')}`);
+        }
+        break;
+      }
+      case 'AI_COUNT_TOKENS':
+      case 'SNOWFLAKE.CORTEX.COUNT_TOKENS': {
+        const payload = parseAiCountTokensArgs(argsRaw);
+        sqlText = buildAiCountTokensSql(functionName, payload);
+        request = {
+          function_name: payload.functionName,
+          input_text: payload.inputText,
+          ...(payload.modelName ? { model_name: payload.modelName } : {}),
+          ...(payload.categories ? { categories: payload.categories } : {})
+        };
+        verboseArgs = payload;
+        summaryLines.push(`Function name: ${payload.functionName}`);
+        if (payload.modelName) {
+          summaryLines.push(`Model: ${payload.modelName}`);
+        }
+        if (payload.categories) {
+          summaryLines.push(`Categories: ${payload.categories.length}`);
+        }
+        break;
+      }
+      case 'AI_PARSE_DOCUMENT':
+      case 'SNOWFLAKE.CORTEX.PARSE_DOCUMENT': {
+        const payload = parseAiParseDocumentArgs(argsRaw);
+        sqlText = buildAiParseDocumentSql(functionName, payload);
+        request = {
+          file: payload.file,
+          ...(payload.options ? { options: payload.options } : {})
+        };
+        verboseArgs = payload;
+        summaryLines.push(`File: ${payload.file}`);
+        if (payload.options) {
+          summaryLines.push(`Options keys: ${Object.keys(payload.options).join(', ')}`);
         }
         break;
       }
@@ -204,6 +279,24 @@ function normalizeFunctionName(raw: string): string {
   }
   if (upper === 'SNOWFLAKE.CORTEX.SENTIMENT') {
     return 'SNOWFLAKE.CORTEX.SENTIMENT';
+  }
+  if (upper === 'AI_CLASSIFY') {
+    return 'AI_CLASSIFY';
+  }
+  if (upper === 'SNOWFLAKE.CORTEX.CLASSIFY') {
+    return 'SNOWFLAKE.CORTEX.CLASSIFY';
+  }
+  if (upper === 'AI_COUNT_TOKENS') {
+    return 'AI_COUNT_TOKENS';
+  }
+  if (upper === 'SNOWFLAKE.CORTEX.COUNT_TOKENS') {
+    return 'SNOWFLAKE.CORTEX.COUNT_TOKENS';
+  }
+  if (upper === 'AI_PARSE_DOCUMENT') {
+    return 'AI_PARSE_DOCUMENT';
+  }
+  if (upper === 'SNOWFLAKE.CORTEX.PARSE_DOCUMENT') {
+    return 'SNOWFLAKE.CORTEX.PARSE_DOCUMENT';
   }
   return upper;
 }
@@ -386,6 +479,78 @@ function resolveExtractResponseFormat(
   return primary;
 }
 
+function resolveClassifyInput(value: unknown): string | Record<string, unknown> {
+  if (value === undefined || value === null) {
+    throw new Error('Missing input - expected a string or JSON object.');
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new Error('Missing input - cannot be blank.');
+    }
+    return value;
+  }
+  if (isPlainObject(value)) {
+    return value;
+  }
+  throw new Error('AI_CLASSIFY input must be a string or JSON object.');
+}
+
+function normalizeClassifyCategories(
+  value: unknown,
+  label: string
+): Array<string | { label: string; description?: string }> {
+  if (!Array.isArray(value)) {
+    throw new Error(`AI_CLASSIFY ${label} must be a JSON array.`);
+  }
+  if (value.length === 0) {
+    throw new Error(`AI_CLASSIFY ${label} cannot be empty.`);
+  }
+
+  const normalized: Array<string | { label: string; description?: string }> = [];
+  const seen = new Set<string>();
+
+  value.forEach((entry, index) => {
+    if (typeof entry === 'string') {
+      const trimmed = entry.trim();
+      if (!trimmed) {
+        throw new Error(`AI_CLASSIFY ${label}[${index}] cannot be blank.`);
+      }
+      if (seen.has(trimmed)) {
+        return;
+      }
+      seen.add(trimmed);
+      normalized.push(trimmed);
+      return;
+    }
+
+    if (isPlainObject(entry)) {
+      const rawLabel = entry.label;
+      if (typeof rawLabel !== 'string' || !rawLabel.trim()) {
+        throw new Error(`AI_CLASSIFY ${label}[${index}].label must be a non-empty string.`);
+      }
+      const trimmedLabel = rawLabel.trim();
+      if (seen.has(trimmedLabel)) {
+        return;
+      }
+      const description = entry.description;
+      if (description !== undefined && typeof description !== 'string') {
+        throw new Error(`AI_CLASSIFY ${label}[${index}].description must be a string.`);
+      }
+      seen.add(trimmedLabel);
+      normalized.push({
+        label: trimmedLabel,
+        ...(description && description.trim() ? { description: description.trim() } : {})
+      });
+      return;
+    }
+
+    throw new Error(`AI_CLASSIFY ${label}[${index}] must be a string or object.`);
+  });
+
+  return normalized;
+}
+
 function parseAiSentimentArgs(raw: string): AiSentimentPayload {
   const parsed = parseJsonObject(raw, 'args');
 
@@ -423,6 +588,129 @@ function parseAiSentimentArgs(raw: string): AiSentimentPayload {
   }
 
   return { text: resolvedText, categories: resolvedCategories };
+}
+
+function parseAiClassifyArgs(raw: string): AiClassifyPayload {
+  const parsed = parseJsonObject(raw, 'args');
+
+  const { input, list_of_categories, categories, config_object, config, ...rest } = parsed;
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`AI_CLASSIFY does not accept additional arguments: ${Object.keys(rest).join(', ')}`);
+  }
+
+  if (list_of_categories !== undefined && categories !== undefined) {
+    throw new Error('Provide only one of list_of_categories or categories.');
+  }
+
+  const resolvedCategories = normalizeClassifyCategories(
+    (categories ?? list_of_categories) as unknown,
+    'categories'
+  );
+
+  if (resolvedCategories.length < 2) {
+    throw new Error('AI_CLASSIFY requires at least two unique categories.');
+  }
+
+  const resolvedInput = resolveClassifyInput(input);
+
+  if (config_object !== undefined && config !== undefined) {
+    throw new Error('Provide only one of config_object or config.');
+  }
+
+  let resolvedConfig: Record<string, unknown> | undefined;
+  const configValue = config_object ?? config;
+  if (configValue !== undefined) {
+    if (!isPlainObject(configValue)) {
+      throw new Error('AI_CLASSIFY config_object must be a JSON object.');
+    }
+    resolvedConfig = configValue;
+  }
+
+  return {
+    input: resolvedInput,
+    categories: resolvedCategories,
+    ...(resolvedConfig ? { config: resolvedConfig } : {})
+  };
+}
+
+function parseAiCountTokensArgs(raw: string): AiCountTokensPayload {
+  const parsed = parseJsonObject(raw, 'args');
+
+  const {
+    function_name,
+    function: functionAlt,
+    input_text,
+    text,
+    model_name,
+    modelName,
+    categories,
+    ...rest
+  } = parsed;
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`AI_COUNT_TOKENS does not accept additional arguments: ${Object.keys(rest).join(', ')}`);
+  }
+
+  const rawFunctionName = requireTrimmedString(function_name ?? functionAlt, 'function_name').toLowerCase();
+  if (!rawFunctionName.startsWith('ai_')) {
+    throw new Error('AI_COUNT_TOKENS function_name must start with ai_.');
+  }
+
+  const inputText = requireNonEmptyString(input_text ?? text, 'input_text');
+
+  let resolvedModelName: string | undefined;
+  if (model_name !== undefined && modelName !== undefined) {
+    throw new Error('Provide only one of model_name or modelName.');
+  }
+  if (model_name !== undefined || modelName !== undefined) {
+    resolvedModelName = requireTrimmedString(model_name ?? modelName, 'model_name');
+  }
+
+  let resolvedCategories: unknown[] | undefined;
+  if (categories !== undefined) {
+    if (!Array.isArray(categories)) {
+      throw new Error('AI_COUNT_TOKENS categories must be a JSON array.');
+    }
+    resolvedCategories = categories;
+  }
+
+  if (resolvedModelName && resolvedCategories) {
+    throw new Error('AI_COUNT_TOKENS accepts either model_name or categories, not both.');
+  }
+
+  return {
+    functionName: rawFunctionName,
+    inputText,
+    ...(resolvedModelName ? { modelName: resolvedModelName } : {}),
+    ...(resolvedCategories ? { categories: resolvedCategories } : {})
+  };
+}
+
+function parseAiParseDocumentArgs(raw: string): AiParseDocumentPayload {
+  const parsed = parseJsonObject(raw, 'args');
+
+  const { file, file_object, options, ...rest } = parsed;
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`AI_PARSE_DOCUMENT does not accept additional arguments: ${Object.keys(rest).join(', ')}`);
+  }
+
+  if (file !== undefined && file_object !== undefined) {
+    throw new Error('Provide only one of file or file_object.');
+  }
+
+  const resolvedFile = requireNonEmptyString(file ?? file_object, 'file');
+
+  let resolvedOptions: Record<string, unknown> | undefined;
+  if (options !== undefined) {
+    if (!isPlainObject(options)) {
+      throw new Error('AI_PARSE_DOCUMENT options must be a JSON object.');
+    }
+    resolvedOptions = options;
+  }
+
+  return {
+    file: resolvedFile,
+    ...(resolvedOptions ? { options: resolvedOptions } : {})
+  };
 }
 
 function parseJsonObject(raw: string, label: string): Record<string, unknown> {
@@ -502,6 +790,56 @@ function buildAiExtractSql(functionName: string, payload: AiExtractPayload): str
   }
 
   args.push(`responseFormat => PARSE_JSON(${responseLiteral})`);
+
+  return `select ${functionName}(${args.join(', ')}) as response`;
+}
+
+function buildAiClassifySql(functionName: string, payload: AiClassifyPayload): string {
+  const args: string[] = [];
+  if (typeof payload.input === 'string') {
+    args.push(`input => ${toSqlString(payload.input)}`);
+  } else {
+    const inputJson = JSON.stringify(payload.input);
+    args.push(`input => PARSE_JSON(${toSqlString(inputJson)})`);
+  }
+
+  const categoriesJson = JSON.stringify(payload.categories);
+  args.push(`list_of_categories => PARSE_JSON(${toSqlString(categoriesJson)})`);
+
+  if (payload.config) {
+    const configJson = JSON.stringify(payload.config);
+    args.push(`config_object => PARSE_JSON(${toSqlString(configJson)})`);
+  }
+
+  return `select ${functionName}(${args.join(', ')}) as response`;
+}
+
+function buildAiCountTokensSql(functionName: string, payload: AiCountTokensPayload): string {
+  const functionLiteral = toSqlString(payload.functionName);
+  const textLiteral = toSqlString(payload.inputText);
+
+  if (payload.modelName) {
+    const modelLiteral = toSqlString(payload.modelName);
+    return `select ${functionName}(${functionLiteral}, ${modelLiteral}, ${textLiteral}) as response`;
+  }
+
+  if (payload.categories) {
+    const categoriesJson = JSON.stringify(payload.categories);
+    const categoriesLiteral = toSqlString(categoriesJson);
+    return `select ${functionName}(${functionLiteral}, ${textLiteral}, PARSE_JSON(${categoriesLiteral})) as response`;
+  }
+
+  return `select ${functionName}(${functionLiteral}, ${textLiteral}) as response`;
+}
+
+function buildAiParseDocumentSql(functionName: string, payload: AiParseDocumentPayload): string {
+  const args: string[] = [];
+  args.push(`file => ${payload.file}`);
+
+  if (payload.options) {
+    const optionsJson = JSON.stringify(payload.options);
+    args.push(`options => PARSE_JSON(${toSqlString(optionsJson)})`);
+  }
 
   return `select ${functionName}(${args.join(', ')}) as response`;
 }
