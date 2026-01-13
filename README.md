@@ -58,6 +58,34 @@ Optional:
     SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
 ```
 
+```yaml
+- name: Run AI_EXTRACT
+  id: aiextract
+  uses: marcelinojackson-org/Snowflake.AISQLAction@v0
+  with:
+    function: AI_EXTRACT
+    args: >
+      {
+        "model": "snowflake-arctic",
+        "text": "Order 18422 shipped to Denver on 2024-02-01 for $412.50.",
+        "schema": {
+          "order_id": "string",
+          "city": "string",
+          "date": "string",
+          "amount": "number"
+        }
+      }
+  env:
+    SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+    SNOWFLAKE_ACCOUNT_URL: ${{ secrets.SNOWFLAKE_ACCOUNT_URL }}
+    SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+    SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+    SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+    SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+    SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+    SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
+
 ## Outputs
 
 - `result-text`: first scalar value returned by the SQL call.
