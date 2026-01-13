@@ -1,12 +1,12 @@
 # Snowflake.AISQLAction
 
-Run Snowflake Cortex AI SQL functions from a GitHub Action. Supported: `AI_COMPLETE`, `AI_EXTRACT`, `AI_SENTIMENT`, `AI_CLASSIFY`, `AI_COUNT_TOKENS`, `AI_EMBED`, `AI_SIMILARITY`, `AI_PARSE_DOCUMENT`.
+Run Snowflake Cortex AI SQL functions from a GitHub Action. Supported: `AI_COMPLETE`, `AI_EXTRACT`, `AI_SENTIMENT`, `AI_CLASSIFY`, `AI_COUNT_TOKENS`, `AI_EMBED`, `AI_SIMILARITY`, `AI_SUMMARIZE`, `AI_PARSE_DOCUMENT`.
 
 ## Common inputs (all functions)
 
 | Input / Env | Required | Description |
 |-------------|----------|-------------|
-| `function` / `AI_FUNCTION` | No (defaults to `AI_COMPLETE`) | Cortex AI SQL function name. Supported: `AI_COMPLETE`, `AI_EXTRACT`, `AI_SENTIMENT`, `AI_CLASSIFY`, `AI_COUNT_TOKENS`, `AI_EMBED`, `AI_SIMILARITY`, `AI_PARSE_DOCUMENT` (or `SNOWFLAKE.CORTEX.COMPLETE` / `SNOWFLAKE.CORTEX.EXTRACT` / `SNOWFLAKE.CORTEX.SENTIMENT` / `SNOWFLAKE.CORTEX.CLASSIFY` / `SNOWFLAKE.CORTEX.COUNT_TOKENS` / `SNOWFLAKE.CORTEX.EMBED` / `SNOWFLAKE.CORTEX.SIMILARITY` / `SNOWFLAKE.CORTEX.PARSE_DOCUMENT`). |
+| `function` / `AI_FUNCTION` | No (defaults to `AI_COMPLETE`) | Cortex AI SQL function name. Supported: `AI_COMPLETE`, `AI_EXTRACT`, `AI_SENTIMENT`, `AI_CLASSIFY`, `AI_COUNT_TOKENS`, `AI_EMBED`, `AI_SIMILARITY`, `AI_SUMMARIZE`, `AI_PARSE_DOCUMENT` (or `SNOWFLAKE.CORTEX.COMPLETE` / `SNOWFLAKE.CORTEX.EXTRACT` / `SNOWFLAKE.CORTEX.SENTIMENT` / `SNOWFLAKE.CORTEX.CLASSIFY` / `SNOWFLAKE.CORTEX.COUNT_TOKENS` / `SNOWFLAKE.CORTEX.EMBED` / `SNOWFLAKE.CORTEX.SIMILARITY` / `SNOWFLAKE.CORTEX.SUMMARIZE` / `SNOWFLAKE.CORTEX.PARSE_DOCUMENT`). |
 | `args` / `AI_ARGS` | Yes | JSON payload for the function. The schema depends on the function. |
 | `SNOWFLAKE_*` env vars | Yes | Connection parameters for every call (`SNOWFLAKE_ACCOUNT` or `SNOWFLAKE_ACCOUNT_URL`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD` or `SNOWFLAKE_PRIVATE_KEY_PATH`, `SNOWFLAKE_ROLE`, `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_DATABASE`, `SNOWFLAKE_SCHEMA`). |
 | `SNOWFLAKE_LOG_LEVEL` | No | Set to `VERBOSE` to log the SQL and request JSON. |
@@ -21,6 +21,7 @@ Run Snowflake Cortex AI SQL functions from a GitHub Action. Supported: `AI_COMPL
 | [AI_CLASSIFY](#ai_classify) | `input`, `list_of_categories` (or `categories`) | `config_object` | `{"input":"...","categories":["billing","support"]}` |
 | [AI_EMBED](#ai_embed) | `model`, one of `input` or `input_file` | none | `{"model":"snowflake-arctic-embed-l-v2.0","input":"..."}` |
 | [AI_SIMILARITY](#ai_similarity) | `input1`, `input2` (or `input1_file`, `input2_file`) | `config_object` | `{"input1":"...","input2":"..."}` |
+| [AI_SUMMARIZE](#ai_summarize) | `text` | none | `{"text":"..."}` |
 | [AI_COUNT_TOKENS](#ai_count_tokens) | `function_name`, `input_text` | `model_name` or `categories` | `{"function_name":"ai_complete","input_text":"..."}` |
 | [AI_PARSE_DOCUMENT](#ai_parse_document) | `file` | `options` | `{"file":"TO_FILE('@docs/report.pdf')"}` |
 
@@ -659,6 +660,98 @@ Sample result:
 
 ```json
 0.76
+```
+
+</details>
+
+## AI_SUMMARIZE
+
+Required args:
+- `text` (string)
+
+Returns:
+- String summary of the original text.
+
+### AI_SUMMARIZE examples
+
+<details open>
+<summary>Simple</summary>
+
+```yaml
+- name: AI_SUMMARIZE (simple)
+  id: ai-summarize-simple
+  uses: marcelinojackson-org/Snowflake.AISQLAction@v0
+  with:
+    function: AI_SUMMARIZE
+    args: >
+      {
+        "text": "The Q2 release focused on stability, speed, and documentation clarity. Several minor bugs were fixed and deployment scripts were updated."
+      }
+  env:
+    SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+    SNOWFLAKE_ACCOUNT_URL: ${{ secrets.SNOWFLAKE_ACCOUNT_URL }}
+    SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+    SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+    SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+    SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+    SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+    SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
+
+Result:
+
+```yaml
+- name: Print AI_SUMMARIZE result
+  run: |
+    echo '${{ steps.ai-summarize-simple.outputs.result-text }}'
+    echo '${{ steps.ai-summarize-simple.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+"Q2 focused on stability, speed, and doc updates with minor bug fixes."
+```
+
+</details>
+
+<details open>
+<summary>Advanced (all parameters)</summary>
+
+```yaml
+- name: AI_SUMMARIZE (advanced)
+  id: ai-summarize-advanced
+  uses: marcelinojackson-org/Snowflake.AISQLAction@v0
+  with:
+    function: AI_SUMMARIZE
+    args: >
+      {
+        "text": "The Q2 release focused on stability, speed, and documentation clarity. Several minor bugs were fixed and deployment scripts were updated. The team also improved monitoring coverage and tightened alert thresholds."
+      }
+  env:
+    SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+    SNOWFLAKE_ACCOUNT_URL: ${{ secrets.SNOWFLAKE_ACCOUNT_URL }}
+    SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+    SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+    SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+    SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+    SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+    SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
+
+Result:
+
+```yaml
+- name: Print AI_SUMMARIZE result
+  run: |
+    echo '${{ steps.ai-summarize-advanced.outputs.result-text }}'
+    echo '${{ steps.ai-summarize-advanced.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+"Q2 delivered stability and speed improvements, doc updates, and stronger monitoring."
 ```
 
 </details>

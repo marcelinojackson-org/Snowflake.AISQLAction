@@ -18,6 +18,8 @@ const SUPPORTED_FUNCTIONS = [
   'SNOWFLAKE.CORTEX.EMBED',
   'AI_SIMILARITY',
   'SNOWFLAKE.CORTEX.SIMILARITY',
+  'AI_SUMMARIZE',
+  'SNOWFLAKE.CORTEX.SUMMARIZE',
   'AI_PARSE_DOCUMENT',
   'SNOWFLAKE.CORTEX.PARSE_DOCUMENT'
 ] as const;
@@ -67,6 +69,10 @@ interface AiSimilarityPayload {
   input1File?: string;
   input2File?: string;
   config?: Record<string, unknown>;
+}
+
+interface AiSummarizePayload {
+  text: string;
 }
 
 interface AiParseDocumentPayload {
@@ -227,6 +233,15 @@ async function main(): Promise<void> {
         }
         break;
       }
+      case 'AI_SUMMARIZE':
+      case 'SNOWFLAKE.CORTEX.SUMMARIZE': {
+        const payload = parseAiSummarizeArgs(argsRaw);
+        sqlText = buildAiSummarizeSql(functionName, payload);
+        request = { text: payload.text };
+        verboseArgs = payload;
+        summaryLines.push(`Text length: ${payload.text.length} chars`);
+        break;
+      }
       case 'AI_PARSE_DOCUMENT':
       case 'SNOWFLAKE.CORTEX.PARSE_DOCUMENT': {
         const payload = parseAiParseDocumentArgs(argsRaw);
@@ -361,6 +376,12 @@ function normalizeFunctionName(raw: string): string {
   }
   if (upper === 'SNOWFLAKE.CORTEX.SIMILARITY') {
     return 'SNOWFLAKE.CORTEX.SIMILARITY';
+  }
+  if (upper === 'AI_SUMMARIZE') {
+    return 'AI_SUMMARIZE';
+  }
+  if (upper === 'SNOWFLAKE.CORTEX.SUMMARIZE') {
+    return 'SNOWFLAKE.CORTEX.SUMMARIZE';
   }
   if (upper === 'AI_PARSE_DOCUMENT') {
     return 'AI_PARSE_DOCUMENT';
@@ -835,6 +856,19 @@ function parseAiSimilarityArgs(raw: string): AiSimilarityPayload {
   };
 }
 
+function parseAiSummarizeArgs(raw: string): AiSummarizePayload {
+  const parsed = parseJsonObject(raw, 'args');
+
+  const { text, ...rest } = parsed;
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`AI_SUMMARIZE does not accept additional arguments: ${Object.keys(rest).join(', ')}`);
+  }
+
+  const resolvedText = requireNonEmptyString(text, 'text');
+
+  return { text: resolvedText };
+}
+
 function parseAiParseDocumentArgs(raw: string): AiParseDocumentPayload {
   const parsed = parseJsonObject(raw, 'args');
 
@@ -999,6 +1033,11 @@ function buildAiSimilaritySql(functionName: string, payload: AiSimilarityPayload
   }
 
   return `select ${functionName}(${args.join(', ')}) as response`;
+}
+
+function buildAiSummarizeSql(functionName: string, payload: AiSummarizePayload): string {
+  const textLiteral = toSqlString(payload.text);
+  return `select ${functionName}(${textLiteral}) as response`;
 }
 
 function buildAiParseDocumentSql(functionName: string, payload: AiParseDocumentPayload): string {
