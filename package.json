@@ -1,0 +1,35 @@
+{
+  "name": "snowflake-aisql-action",
+  "version": "0.1.0",
+  "description": "GitHub Action that calls Snowflake Cortex AI SQL functions via the shared common library",
+  "main": "dist/snowflake-aisql.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && npm run bundle",
+    "bundle": "ncc build lib/snowflake-aisql.js -o dist && mv dist/index.js dist/snowflake-aisql.js && if [ -f dist/index.js.map ]; then mv dist/index.js.map dist/snowflake-aisql.js.map; fi",
+    "prepare": "npm run build",
+    "test": "echo \"No tests yet - add integration tests\" && exit 0"
+  },
+  "files": [
+    "dist",
+    "action.yml",
+    "README.md"
+  ],
+  "keywords": [
+    "snowflake",
+    "cortex",
+    "ai",
+    "sql",
+    "github-actions"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@marcelinojackson-org/snowflake-common": "file:../Snowflake.Common"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.4",
+    "typescript": "^5.9.3"
+  }
+}
