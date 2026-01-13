@@ -14,6 +14,8 @@ const SUPPORTED_FUNCTIONS = [
   'SNOWFLAKE.CORTEX.CLASSIFY',
   'AI_COUNT_TOKENS',
   'SNOWFLAKE.CORTEX.COUNT_TOKENS',
+  'AI_EMBED',
+  'SNOWFLAKE.CORTEX.EMBED',
   'AI_SIMILARITY',
   'SNOWFLAKE.CORTEX.SIMILARITY',
   'AI_PARSE_DOCUMENT',
@@ -51,6 +53,12 @@ interface AiCountTokensPayload {
   inputText: string;
   modelName?: string;
   categories?: unknown[];
+}
+
+interface AiEmbedPayload {
+  model: string;
+  input: string;
+  inputFile?: string;
 }
 
 interface AiSimilarityPayload {
@@ -176,6 +184,23 @@ async function main(): Promise<void> {
         }
         if (payload.categories) {
           summaryLines.push(`Categories: ${payload.categories.length}`);
+        }
+        break;
+      }
+      case 'AI_EMBED':
+      case 'SNOWFLAKE.CORTEX.EMBED': {
+        const payload = parseAiEmbedArgs(argsRaw);
+        sqlText = buildAiEmbedSql(functionName, payload);
+        request = {
+          model: payload.model,
+          ...(payload.inputFile ? { input_file: payload.inputFile } : { input: payload.input })
+        };
+        verboseArgs = payload;
+        summaryLines.push(`Model: ${payload.model}`);
+        if (payload.inputFile) {
+          summaryLines.push(`Input file: ${payload.inputFile}`);
+        } else {
+          summaryLines.push(`Input length: ${payload.input.length} chars`);
         }
         break;
       }
@@ -324,6 +349,12 @@ function normalizeFunctionName(raw: string): string {
   }
   if (upper === 'SNOWFLAKE.CORTEX.COUNT_TOKENS') {
     return 'SNOWFLAKE.CORTEX.COUNT_TOKENS';
+  }
+  if (upper === 'AI_EMBED') {
+    return 'AI_EMBED';
+  }
+  if (upper === 'SNOWFLAKE.CORTEX.EMBED') {
+    return 'SNOWFLAKE.CORTEX.EMBED';
   }
   if (upper === 'AI_SIMILARITY') {
     return 'AI_SIMILARITY';
@@ -724,6 +755,36 @@ function parseAiCountTokensArgs(raw: string): AiCountTokensPayload {
   };
 }
 
+function parseAiEmbedArgs(raw: string): AiEmbedPayload {
+  const parsed = parseJsonObject(raw, 'args');
+
+  const { model, input, input_file, ...rest } = parsed;
+  if (Object.keys(rest).length > 0) {
+    throw new Error(`AI_EMBED does not accept additional arguments: ${Object.keys(rest).join(', ')}`);
+  }
+
+  if (input !== undefined && input_file !== undefined) {
+    throw new Error('AI_EMBED requires either input or input_file, not both.');
+  }
+
+  const resolvedModel = requireTrimmedString(model, 'model');
+
+  let resolvedInput = '';
+  let resolvedInputFile: string | undefined;
+
+  if (input_file !== undefined) {
+    resolvedInputFile = requireNonEmptyString(input_file, 'input_file');
+  } else {
+    resolvedInput = requireNonEmptyString(input, 'input');
+  }
+
+  return {
+    model: resolvedModel,
+    input: resolvedInput,
+    ...(resolvedInputFile ? { inputFile: resolvedInputFile } : {})
+  };
+}
+
 function parseAiSimilarityArgs(raw: string): AiSimilarityPayload {
   const parsed = parseJsonObject(raw, 'args');
 
@@ -919,6 +980,12 @@ function buildAiCountTokensSql(functionName: string, payload: AiCountTokensPaylo
   }
 
   return `select ${functionName}(${functionLiteral}, ${textLiteral}) as response`;
+}
+
+function buildAiEmbedSql(functionName: string, payload: AiEmbedPayload): string {
+  const modelLiteral = toSqlString(payload.model);
+  const inputLiteral = payload.inputFile ? payload.inputFile : toSqlString(payload.input);
+  return `select ${functionName}(${modelLiteral}, ${inputLiteral}) as response`;
 }
 
 function buildAiSimilaritySql(functionName: string, payload: AiSimilarityPayload): string {

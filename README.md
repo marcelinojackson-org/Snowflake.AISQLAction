@@ -1,12 +1,12 @@
 # Snowflake.AISQLAction
 
-Run Snowflake Cortex AI SQL functions from a GitHub Action. Supported: `AI_COMPLETE`, `AI_EXTRACT`, `AI_SENTIMENT`, `AI_CLASSIFY`, `AI_COUNT_TOKENS`, `AI_SIMILARITY`, `AI_PARSE_DOCUMENT`.
+Run Snowflake Cortex AI SQL functions from a GitHub Action. Supported: `AI_COMPLETE`, `AI_EXTRACT`, `AI_SENTIMENT`, `AI_CLASSIFY`, `AI_COUNT_TOKENS`, `AI_EMBED`, `AI_SIMILARITY`, `AI_PARSE_DOCUMENT`.
 
 ## Common inputs (all functions)
 
 | Input / Env | Required | Description |
 |-------------|----------|-------------|
-| `function` / `AI_FUNCTION` | No (defaults to `AI_COMPLETE`) | Cortex AI SQL function name. Supported: `AI_COMPLETE`, `AI_EXTRACT`, `AI_SENTIMENT`, `AI_CLASSIFY`, `AI_COUNT_TOKENS`, `AI_SIMILARITY`, `AI_PARSE_DOCUMENT` (or `SNOWFLAKE.CORTEX.COMPLETE` / `SNOWFLAKE.CORTEX.EXTRACT` / `SNOWFLAKE.CORTEX.SENTIMENT` / `SNOWFLAKE.CORTEX.CLASSIFY` / `SNOWFLAKE.CORTEX.COUNT_TOKENS` / `SNOWFLAKE.CORTEX.SIMILARITY` / `SNOWFLAKE.CORTEX.PARSE_DOCUMENT`). |
+| `function` / `AI_FUNCTION` | No (defaults to `AI_COMPLETE`) | Cortex AI SQL function name. Supported: `AI_COMPLETE`, `AI_EXTRACT`, `AI_SENTIMENT`, `AI_CLASSIFY`, `AI_COUNT_TOKENS`, `AI_EMBED`, `AI_SIMILARITY`, `AI_PARSE_DOCUMENT` (or `SNOWFLAKE.CORTEX.COMPLETE` / `SNOWFLAKE.CORTEX.EXTRACT` / `SNOWFLAKE.CORTEX.SENTIMENT` / `SNOWFLAKE.CORTEX.CLASSIFY` / `SNOWFLAKE.CORTEX.COUNT_TOKENS` / `SNOWFLAKE.CORTEX.EMBED` / `SNOWFLAKE.CORTEX.SIMILARITY` / `SNOWFLAKE.CORTEX.PARSE_DOCUMENT`). |
 | `args` / `AI_ARGS` | Yes | JSON payload for the function. The schema depends on the function. |
 | `SNOWFLAKE_*` env vars | Yes | Connection parameters for every call (`SNOWFLAKE_ACCOUNT` or `SNOWFLAKE_ACCOUNT_URL`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD` or `SNOWFLAKE_PRIVATE_KEY_PATH`, `SNOWFLAKE_ROLE`, `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_DATABASE`, `SNOWFLAKE_SCHEMA`). |
 | `SNOWFLAKE_LOG_LEVEL` | No | Set to `VERBOSE` to log the SQL and request JSON. |
@@ -19,6 +19,7 @@ Run Snowflake Cortex AI SQL functions from a GitHub Action. Supported: `AI_COMPL
 | [AI_EXTRACT](#ai_extract) | `response_format`, one of `text` or `file` | none | `{"text":"...","response_format":{"field":"question"}}` |
 | [AI_SENTIMENT](#ai_sentiment) | `text` | `categories` | `{"text":"..."}` |
 | [AI_CLASSIFY](#ai_classify) | `input`, `list_of_categories` (or `categories`) | `config_object` | `{"input":"...","categories":["billing","support"]}` |
+| [AI_EMBED](#ai_embed) | `model`, one of `input` or `input_file` | none | `{"model":"snowflake-arctic-embed-l-v2.0","input":"..."}` |
 | [AI_SIMILARITY](#ai_similarity) | `input1`, `input2` (or `input1_file`, `input2_file`) | `config_object` | `{"input1":"...","input2":"..."}` |
 | [AI_COUNT_TOKENS](#ai_count_tokens) | `function_name`, `input_text` | `model_name` or `categories` | `{"function_name":"ai_complete","input_text":"..."}` |
 | [AI_PARSE_DOCUMENT](#ai_parse_document) | `file` | `options` | `{"file":"TO_FILE('@docs/report.pdf')"}` |
@@ -462,6 +463,101 @@ Sample result:
 
 ```json
 {"labels":["billing","product"]}
+```
+
+</details>
+
+## AI_EMBED
+
+Required args:
+- `model` (string)
+- `input` (string) or `input_file` (SQL FILE expression, for example `TO_FILE('@docs/image.png')`)
+
+Returns:
+- Embedding vector of type VECTOR.
+
+### AI_EMBED examples
+
+<details open>
+<summary>Simple</summary>
+
+```yaml
+- name: AI_EMBED (simple)
+  id: ai-embed-simple
+  uses: marcelinojackson-org/Snowflake.AISQLAction@v0
+  with:
+    function: AI_EMBED
+    args: >
+      {
+        "model": "snowflake-arctic-embed-l-v2.0",
+        "input": "Summarize the onboarding guide for new hires."
+      }
+  env:
+    SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+    SNOWFLAKE_ACCOUNT_URL: ${{ secrets.SNOWFLAKE_ACCOUNT_URL }}
+    SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+    SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+    SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+    SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+    SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+    SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
+
+Result:
+
+```yaml
+- name: Print AI_EMBED result
+  run: |
+    echo '${{ steps.ai-embed-simple.outputs.result-text }}'
+    echo '${{ steps.ai-embed-simple.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+[0.012, -0.031, 0.087, -0.004]
+```
+
+</details>
+
+<details open>
+<summary>Advanced (all parameters)</summary>
+
+```yaml
+- name: AI_EMBED (advanced)
+  id: ai-embed-advanced
+  uses: marcelinojackson-org/Snowflake.AISQLAction@v0
+  with:
+    function: AI_EMBED
+    args: >
+      {
+        "model": "voyage-multimodal-3",
+        "input_file": "TO_FILE('@images/catalog/product-42.png')"
+      }
+  env:
+    SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+    SNOWFLAKE_ACCOUNT_URL: ${{ secrets.SNOWFLAKE_ACCOUNT_URL }}
+    SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+    SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+    SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+    SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+    SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+    SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+```
+
+Result:
+
+```yaml
+- name: Print AI_EMBED result
+  run: |
+    echo '${{ steps.ai-embed-advanced.outputs.result-text }}'
+    echo '${{ steps.ai-embed-advanced.outputs.result-json }}' | jq .
+```
+
+Sample result:
+
+```json
+[0.004, 0.023, -0.018, 0.091]
 ```
 
 </details>
