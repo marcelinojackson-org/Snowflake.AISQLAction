@@ -13,18 +13,40 @@ Run Snowflake Cortex AI SQL functions from a GitHub Action. Supported: `AI_COMPL
 
 ## Function index
 
+### Text generation & transformation
+
 | Function | Required args | Optional args | Minimal args JSON |
 |----------|--------------|--------------|------------------|
 | [AI_COMPLETE](#ai_complete) | `model`, `prompt` | `model_parameters`, `response_format`, `show_details` | `{"model":"snowflake-arctic","prompt":"..."}` |
-| [AI_EXTRACT](#ai_extract) | `response_format`, one of `text` or `file` | none | `{"text":"...","response_format":{"field":"question"}}` |
-| [AI_SENTIMENT](#ai_sentiment) | `text` | `categories` | `{"text":"..."}` |
-| [AI_CLASSIFY](#ai_classify) | `input`, `list_of_categories` (or `categories`) | `config_object` | `{"input":"...","categories":["billing","support"]}` |
-| [AI_EMBED](#ai_embed) | `model`, one of `input` or `input_file` | none | `{"model":"snowflake-arctic-embed-l-v2.0","input":"..."}` |
-| [AI_SIMILARITY](#ai_similarity) | `input1`, `input2` (or `input1_file`, `input2_file`) | `config_object` | `{"input1":"...","input2":"..."}` |
 | [AI_SUMMARIZE](#ai_summarize) | `text` | none | `{"text":"..."}` |
 | [AI_TRANSLATE](#ai_translate) | `text`, `source_language`, `target_language` | none | `{"text":"...","source_language":"en","target_language":"es"}` |
-| [AI_COUNT_TOKENS](#ai_count_tokens) | `function_name`, `input_text` | `model_name` or `categories` | `{"function_name":"ai_complete","input_text":"..."}` |
+
+### Extraction & parsing
+
+| Function | Required args | Optional args | Minimal args JSON |
+|----------|--------------|--------------|------------------|
+| [AI_EXTRACT](#ai_extract) | `response_format`, one of `text` or `file` | none | `{"text":"...","response_format":{"field":"question"}}` |
 | [AI_PARSE_DOCUMENT](#ai_parse_document) | `file` | `options` | `{"file":"TO_FILE('@docs/report.pdf')"}` |
+
+### Analysis & labeling
+
+| Function | Required args | Optional args | Minimal args JSON |
+|----------|--------------|--------------|------------------|
+| [AI_CLASSIFY](#ai_classify) | `input`, `list_of_categories` (or `categories`) | `config_object` | `{"input":"...","categories":["billing","support"]}` |
+| [AI_SENTIMENT](#ai_sentiment) | `text` | `categories` | `{"text":"..."}` |
+
+### Similarity & embeddings
+
+| Function | Required args | Optional args | Minimal args JSON |
+|----------|--------------|--------------|------------------|
+| [AI_EMBED](#ai_embed) | `model`, one of `input` or `input_file` | none | `{"model":"snowflake-arctic-embed-l-v2.0","input":"..."}` |
+| [AI_SIMILARITY](#ai_similarity) | `input1`, `input2` (or `input1_file`, `input2_file`) | `config_object` | `{"input1":"...","input2":"..."}` |
+
+### Utility & planning
+
+| Function | Required args | Optional args | Minimal args JSON |
+|----------|--------------|--------------|------------------|
+| [AI_COUNT_TOKENS](#ai_count_tokens) | `function_name`, `input_text` | `model_name` or `categories` | `{"function_name":"ai_complete","input_text":"..."}` |
 
 ## AI_COMPLETE
 
