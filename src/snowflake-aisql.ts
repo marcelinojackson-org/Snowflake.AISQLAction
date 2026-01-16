@@ -1,5 +1,12 @@
-import * as core from '@actions/core';
-import { runSql, SnowflakeConnectionConfig } from '@marcelinojackson-org/snowflake-common';
+const processWithDeprecation = process as NodeJS.Process & { noDeprecation?: boolean };
+processWithDeprecation.noDeprecation = true;
+
+import type * as coreType from '@actions/core';
+import type * as snowflakeCommon from '@marcelinojackson-org/snowflake-common';
+import type { SnowflakeConnectionConfig } from '@marcelinojackson-org/snowflake-common';
+
+const core = require('@actions/core') as typeof coreType;
+const { runSql } = require('@marcelinojackson-org/snowflake-common') as typeof snowflakeCommon;
 
 type LogLevel = 'MINIMAL' | 'VERBOSE';
 
@@ -86,6 +93,7 @@ interface AiTranslatePayload {
 interface AiParseDocumentPayload {
   file: string;
   options?: Record<string, unknown>;
+  fileIsExpression?: boolean;
 }
 
 async function main(): Promise<void> {
@@ -941,6 +949,7 @@ function parseAiParseDocumentArgs(raw: string): AiParseDocumentPayload {
   }
 
   const resolvedFile = requireNonEmptyString(file ?? file_object, 'file');
+  const fileIsExpression = file_object !== undefined;
 
   let resolvedOptions: Record<string, unknown> | undefined;
   if (options !== undefined) {
@@ -952,7 +961,8 @@ function parseAiParseDocumentArgs(raw: string): AiParseDocumentPayload {
 
   return {
     file: resolvedFile,
-    ...(resolvedOptions ? { options: resolvedOptions } : {})
+    ...(resolvedOptions ? { options: resolvedOptions } : {}),
+    ...(fileIsExpression ? { fileIsExpression } : {})
   };
 }
 
@@ -1040,18 +1050,18 @@ function buildAiExtractSql(functionName: string, payload: AiExtractPayload): str
 function buildAiClassifySql(functionName: string, payload: AiClassifyPayload): string {
   const args: string[] = [];
   if (typeof payload.input === 'string') {
-    args.push(`input => ${toSqlString(payload.input)}`);
+    args.push(toSqlString(payload.input));
   } else {
     const inputJson = JSON.stringify(payload.input);
-    args.push(`input => PARSE_JSON(${toSqlString(inputJson)})`);
+    args.push(`PARSE_JSON(${toSqlString(inputJson)})`);
   }
 
   const categoriesJson = JSON.stringify(payload.categories);
-  args.push(`list_of_categories => PARSE_JSON(${toSqlString(categoriesJson)})`);
+  args.push(`PARSE_JSON(${toSqlString(categoriesJson)})`);
 
   if (payload.config) {
     const configJson = JSON.stringify(payload.config);
-    args.push(`config_object => PARSE_JSON(${toSqlString(configJson)})`);
+    args.push(`PARSE_JSON(${toSqlString(configJson)})`);
   }
 
   return `select ${functionName}(${args.join(', ')}) as response`;
@@ -1108,14 +1118,24 @@ function buildAiTranslateSql(functionName: string, payload: AiTranslatePayload):
 
 function buildAiParseDocumentSql(functionName: string, payload: AiParseDocumentPayload): string {
   const args: string[] = [];
-  args.push(`file => ${payload.file}`);
+  const fileValue = payload.file.trim();
+  const fileExpr =
+    payload.fileIsExpression || isSqlFileExpression(fileValue)
+      ? fileValue
+      : `TO_FILE(${toSqlString(fileValue)})`;
+  args.push(fileExpr);
 
   if (payload.options) {
     const optionsJson = JSON.stringify(payload.options);
-    args.push(`options => PARSE_JSON(${toSqlString(optionsJson)})`);
+    args.push(`PARSE_JSON(${toSqlString(optionsJson)})`);
   }
 
   return `select ${functionName}(${args.join(', ')}) as response`;
+}
+
+function isSqlFileExpression(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith('to_file(') || normalized.startsWith('file(');
 }
 
 function buildAiSentimentSql(functionName: string, payload: AiSentimentPayload): string {
